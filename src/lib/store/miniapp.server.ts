@@ -1,0 +1,262 @@
+/** Telegram Mini App backend: initData verification and catalog/cart/payment operations. */
+import { createHmac } from "crypto";
+import { getDb, getOrCreateUser, getSettings, type BotUser, type StoreSettings } from "./db.server";
+import { createInvoice, type Transaction } from "./payments.server";
+import { ASSET_LABEL, ASSET_NETWORK, formatAmount, type PaymentAsset } from "./rates.server";
+import {
+  addToCart,
+  cartTotal,
+  checkout,
+  getCart,
+  listCategories,
+  listProducts,
+  listFeaturedProducts,
+  stockMap,
+  listOrders,
+  listSubcategories,
+  type Product,
+} from "./shop.server";
+import { isPlausibleHash } from "./verify.server";
+import { verifyAndSettle } from "./payments.server";
+
+export type MiniAppUser = { user: BotUser; settings: StoreSettings };
+/** Either a Telegram WebApp initData string or a username/password session token. */
+export type MiniAuth = { initData?: string | null; token?: string | null };
+
+/** Validates Telegram WebApp initData (HMAC-SHA256 with the bot token). */
+async function authenticateTelegram(initData: string): Promise<BotUser> {
+  const token = process.env["TELEGRAM_BOT_TOKEN"];
+  if (!token) throw new Error("Bot is not configured");
+  const params = new URLSearchParams(initData);
+  const hash = params.get("hash");
+  params.delete("hash");
+  if (!hash) throw new Error("Missing Telegram signature");
+
+  const dataCheckString = [...params.entries()]
+    .map(([key, value]) => `${key}=${value}`)
+    .sort()
+    .join("\n");
+  const secret = createHmac("sha256", "WebAppData").update(token).digest();
+  const computed = createHmac("sha256", secret).update(dataCheckString).digest("hex");
+  if (computed !== hash) throw new Error("Invalid Telegram signature");
+
+  const authDate = Number(params.get("auth_date") ?? 0);
+  if (!authDate || Date.now() / 1000 - authDate > 86_400)
+    throw new Error("Session expired, reopen the app");
+
+  const parsed = JSON.parse(params.get("user") ?? "null") as {
+    id: number;
+    username?: string;
+    first_name?: string;
+  } | null;
+  if (!parsed?.id) throw new Error("Missing Telegram user");
+  return getOrCreateUser(parsed);
+}
+
+export async function authenticate(auth: MiniAuth): Promise<MiniAppUser> {
+  let user: BotUser;
+  if (auth.initData) {
+    user = await authenticateTelegram(auth.initData);
+    // Telegram users are registered automatically with login credentials.
+    const { ensureCredentials } = await import("./accounts.server");
+    await ensureCredentials(user);
+  } else if (auth.token) {
+    const { userFromSession } = await import("./accounts.server");
+    user = await userFromSession(auth.token);
+  } else {
+    throw new Error("Please sign in");
+  }
+  if (user.is_banned) throw new Error("Your account is suspended");
+  const settings = await getSettings();
+  return { user, settings };
+}
+
+/** Private notes the admin sent to this user. */
+export async function listNotes(userId: number) {
+  const db = await getDb();
+  const { data } = await db
+    .from("user_notes")
+    .select("id, subject, body, read_at, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data ?? []) as {
+    id: number;
+    subject: string | null;
+    body: string;
+    read_at: string | null;
+    created_at: string;
+  }[];
+}
+
+export async function markNoteRead(auth: MiniAuth, noteId: number) {
+  const { user } = await authenticate(auth);
+  const db = await getDb();
+  await db
+    .from("user_notes")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+  return { ok: true };
+}
+
+function publicProduct(p: Product, stock: number) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    price: Number(p.price),
+    image_url: p.image_url,
+    category_id: p.category_id,
+    subcategory_id: p.subcategory_id,
+    stock: p.product_type === "file" ? null : stock,
+    in_stock: p.product_type === "file" || stock > 0,
+    is_featured: p.is_featured,
+  };
+}
+
+export async function bootstrap(auth: MiniAuth) {
+  const { user, settings } = await authenticate(auth);
+  const db = await getDb();
+  const [categories, products, featured, cart, orders, notes] = await Promise.all([
+    listCategories(),
+    listProducts(null),
+    listFeaturedProducts(),
+    getCart(user.id),
+    listOrders(user.id),
+    listNotes(user.id),
+  ]);
+  const allProducts = [...products, ...featured, ...cart.map((row) => row.product)];
+  const stocks = await stockMap([...new Map(allProducts.map((p) => [p.id, p])).values()]);
+  const subs = await Promise.all(categories.map((c) => listSubcategories(c.id)));
+  const { data: fresh } = await db
+    .from("bot_users")
+    .select("wallet_balance")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return {
+    user: {
+      id: user.id,
+      login_username: (user as { login_username?: string | null }).login_username ?? null,
+      telegram_id: user.telegram_id,
+      username: user.username,
+      first_name: user.first_name,
+      balance: Number(fresh?.wallet_balance ?? user.wallet_balance),
+    },
+    store: {
+      name: settings.store_name,
+      welcome: settings.welcome_message,
+      banner: settings.banner_image_url,
+      support: settings.support_username,
+      min_topup: Number(settings.min_topup_usd),
+    },
+    categories: categories.map((c, index) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      image_url: c.image_url,
+      subcategories: (subs[index] ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        image_url: s.image_url,
+      })),
+    })),
+    products: products.map((p) => publicProduct(p, stocks[p.id] ?? 0)),
+    featured: featured.map((p) => publicProduct(p, stocks[p.id] ?? 0)),
+    cart: cart.map((row) => ({
+      id: row.id,
+      quantity: row.quantity,
+      product: publicProduct(row.product, stocks[row.product.id] ?? 0),
+    })),
+    cartTotal: cartTotal(cart),
+    orders,
+    notes,
+  };
+}
+
+export async function addItem(auth: MiniAuth, productId: number) {
+  const { user } = await authenticate(auth);
+  await addToCart(user.id, productId);
+  return { ok: true };
+}
+
+export async function removeItem(auth: MiniAuth, cartItemId: number) {
+  const { user } = await authenticate(auth);
+  const db = await getDb();
+  await db.from("cart_items").delete().eq("id", cartItemId).eq("user_id", user.id);
+  return { ok: true };
+}
+
+export async function pay(auth: MiniAuth) {
+  const { user } = await authenticate(auth);
+  const result = await checkout(user);
+  return result;
+}
+
+export type MiniInvoice = {
+  id: number;
+  code: string;
+  asset: PaymentAsset;
+  assetLabel: string;
+  network: string;
+  address: string;
+  amount: string;
+  amountUsd: number;
+  expiresAt: string | null;
+};
+
+function toInvoice(tx: Transaction): MiniInvoice {
+  return {
+    id: tx.id,
+    code: tx.invoice_code,
+    asset: tx.asset,
+    assetLabel: ASSET_LABEL[tx.asset],
+    network: ASSET_NETWORK[tx.asset],
+    address: tx.pay_address,
+    amount: formatAmount(Number(tx.expected_amount), tx.asset),
+    amountUsd: Number(tx.amount_usd),
+    expiresAt: tx.expires_at,
+  };
+}
+
+export async function topUp(auth: MiniAuth, asset: PaymentAsset, amountUsd: number) {
+  const { user, settings } = await authenticate(auth);
+  if (!Number.isFinite(amountUsd) || amountUsd < Number(settings.min_topup_usd)) {
+    throw new Error(`Minimum top-up is $${Number(settings.min_topup_usd).toFixed(2)}`);
+  }
+  const tx = await createInvoice(user.id, asset, Math.round(amountUsd * 100) / 100, settings);
+  return toInvoice(tx);
+}
+
+export async function submitHash(auth: MiniAuth, txId: number, hash: string) {
+  const { user, settings } = await authenticate(auth);
+  const db = await getDb();
+  const { data } = await db
+    .from("transactions")
+    .select("*")
+    .eq("id", txId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const tx = data as Transaction | null;
+  if (!tx) throw new Error("Invoice not found");
+  if (!isPlausibleHash(tx.asset, hash))
+    throw new Error("That does not look like a valid transaction hash");
+  const { error } = await db
+    .from("transactions")
+    .update({ tx_hash: hash, status: "submitted", submitted_at: new Date().toISOString() })
+    .eq("id", tx.id);
+  if (error) throw new Error("This transaction hash was already submitted");
+  const outcome = await verifyAndSettle({ ...tx, tx_hash: hash, status: "submitted" }, settings);
+  const { data: fresh } = await db
+    .from("bot_users")
+    .select("wallet_balance")
+    .eq("id", user.id)
+    .maybeSingle();
+  return {
+    status: outcome.status,
+    message: outcome.message,
+    balance: Number(fresh?.wallet_balance ?? 0),
+  };
+}

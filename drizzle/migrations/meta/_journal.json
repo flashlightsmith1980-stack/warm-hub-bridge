@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789216820357,
+      "tag": "0000_temp_bootstrap_exec_helper",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789216945226,
+      "tag": "0001_miniapp_credentials_sessions_and_admin_notes",
+      "breakpoints": true
+    }
+  ]
+}
