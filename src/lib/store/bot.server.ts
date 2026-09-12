@@ -424,7 +424,23 @@ async function handleText(
   const trimmed = text.trim();
   const admin = isAdmin(settings, from.id);
 
+  if (trimmed === "/password") {
+    const { ensureCredentials } = await import("./accounts.server");
+    const creds = await ensureCredentials(user, { reset: true });
+    await sendMessage(
+      chatId,
+      [
+        "🔑 <b>New login details</b>",
+        "",
+        `👤 Username: <code>${escapeHtml(creds.username)}</code>`,
+        `🆔 User ID: <code>${creds.userId}</code>`,
+        `🔑 Password: <code>${escapeHtml(creds.password ?? "")}</code>`,
+      ].join("\n"),
+    );
+    return;
+  }
   if (trimmed.startsWith("/start")) {
+    await deliverCredentials(chatId, user, settings);
     await setState(chatId, null);
     if (!user.welcome_bonus_granted) {
       const { runOnboarding } = await import("./onboarding.server");
