@@ -135,7 +135,7 @@ function Index() {
                       {category.products} products
                     </span>
                     <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">
-                      {category.stock} in stock
+                      {category.products} product{category.products === 1 ? "" : "s"} · {category.stock} available
                     </span>
                   </div>
                   <Button asChild size="sm" className="mt-1 w-full">

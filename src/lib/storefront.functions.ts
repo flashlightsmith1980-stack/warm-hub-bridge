@@ -15,7 +15,7 @@ export type StorefrontCategory = {
 export const storefrontData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [categoriesRes, productsRes, keysRes, reviewsRes, settingsRes, ordersRes] =
+  const [categoriesRes, productsRes, keysRes, reviewsRes, settingsRes, ordersRes, reviewsCountRes] =
     await Promise.all([
       supabaseAdmin.from("categories").select("*").order("sort_order").order("name"),
       supabaseAdmin
@@ -37,6 +37,10 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
         .eq("id", 1)
         .maybeSingle(),
       supabaseAdmin.from("orders").select("id", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("store_reviews")
+        .select("id", { count: "exact", head: true })
+        .eq("is_published", true),
     ]);
 
   const products = productsRes.data ?? [];
@@ -44,8 +48,13 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
   for (const row of keysRes.data ?? []) {
     keyCounts.set(row.product_id, (keyCounts.get(row.product_id) ?? 0) + 1);
   }
-  const stockOf = (product: { id: number; product_type: string }) =>
-    product.product_type === "file" ? 999 : (keyCounts.get(product.id) ?? 0);
+  // File products are digital downloads with unlimited supply; key products
+  // only have as many units as there are unsold keys.
+  const isUnlimited = (product: { product_type: string }) => product.product_type === "file";
+  const keyStockOf = (product: { id: number; product_type: string }) =>
+    isUnlimited(product) ? 0 : (keyCounts.get(product.id) ?? 0);
+  const isAvailable = (product: { id: number; product_type: string }) =>
+    isUnlimited(product) || keyStockOf(product) > 0;
 
   const categories: StorefrontCategory[] = (categoriesRes.data ?? []).map((category) => {
     const own = products.filter((product) => product.category_id === category.id);
@@ -55,7 +64,7 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
       description: category.description,
       image_url: category.image_url,
       products: own.length,
-      stock: own.reduce((total, product) => total + stockOf(product), 0),
+      stock: own.filter(isAvailable).length,
     };
   });
 
@@ -68,7 +77,8 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
       description: product.description,
       price: Number(product.price),
       image_url: product.image_url,
-      stock: stockOf(product),
+      stock: keyStockOf(product),
+      unlimited: isUnlimited(product),
     }));
 
   return {
@@ -80,10 +90,10 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
     },
     stats: {
       products: products.length,
-      inStock: products.reduce((total, product) => total + stockOf(product), 0),
+      inStock: products.filter(isAvailable).length,
       categories: categories.length,
       orders: ordersRes.count ?? 0,
-      reviews: reviewsRes.data?.length ?? 0,
+      reviews: reviewsCountRes.count ?? 0,
     },
     categories,
     featured,
@@ -267,7 +277,7 @@ export const shopCatalog = createServerFn({ method: "GET" }).handler(async () =>
       image_url: p.image_url,
       category_id: p.category_id,
       is_featured: p.is_featured,
-      stock: p.product_type === "file" ? 999 : (counts.get(p.id) ?? 0),
+      stock: p.product_type === "file" ? 0 : (counts.get(p.id) ?? 0),
       unlimited: p.product_type === "file",
     })),
   };
