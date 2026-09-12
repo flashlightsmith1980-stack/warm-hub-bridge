@@ -101,6 +101,28 @@ function welcomeText(settings: StoreSettings, user: BotUser): string {
   ].join("\n");
 }
 
+/** Registers the user for the Mini App and sends the login details once. */
+async function deliverCredentials(chatId: number, user: BotUser, settings: StoreSettings) {
+  const { ensureCredentials } = await import("./accounts.server");
+  const creds = await ensureCredentials(user);
+  if (!creds.password) return;
+  await sendMessage(
+    chatId,
+    [
+      "✅ <b>Your account is ready</b>",
+      "",
+      `👤 Username: <code>${escapeHtml(creds.username)}</code>`,
+      `🆔 User ID: <code>${creds.userId}</code>`,
+      `🔑 Password: <code>${escapeHtml(creds.password)}</code>`,
+      "",
+      "Sign in to the store app with your <b>username</b> and <b>password</b>.",
+      `🌐 ${escapeHtml(miniAppUrl(settings))}`,
+      "",
+      "Keep this message safe — send /password if you ever need a new password.",
+    ].join("\n"),
+  );
+}
+
 const ASSETS: PaymentAsset[] = ["BTC", "USDT_TRC20", "USDC_ERC20"];
 
 async function showTopUpAssets(chatId: number, messageId?: number) {
