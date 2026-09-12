@@ -20,9 +20,11 @@ import { isPlausibleHash } from "./verify.server";
 import { verifyAndSettle } from "./payments.server";
 
 export type MiniAppUser = { user: BotUser; settings: StoreSettings };
+/** Either a Telegram WebApp initData string or a username/password session token. */
+export type MiniAuth = { initData?: string | null; token?: string | null };
 
 /** Validates Telegram WebApp initData (HMAC-SHA256 with the bot token). */
-export async function authenticate(initData: string): Promise<MiniAppUser> {
+async function authenticateTelegram(initData: string): Promise<BotUser> {
   const token = process.env["TELEGRAM_BOT_TOKEN"];
   if (!token) throw new Error("Bot is not configured");
   const params = new URLSearchParams(initData);
@@ -48,11 +50,54 @@ export async function authenticate(initData: string): Promise<MiniAppUser> {
     first_name?: string;
   } | null;
   if (!parsed?.id) throw new Error("Missing Telegram user");
+  return getOrCreateUser(parsed);
+}
 
-  const user = await getOrCreateUser(parsed);
+export async function authenticate(auth: MiniAuth): Promise<MiniAppUser> {
+  let user: BotUser;
+  if (auth.initData) {
+    user = await authenticateTelegram(auth.initData);
+    // Telegram users are registered automatically with login credentials.
+    const { ensureCredentials } = await import("./accounts.server");
+    await ensureCredentials(user);
+  } else if (auth.token) {
+    const { userFromSession } = await import("./accounts.server");
+    user = await userFromSession(auth.token);
+  } else {
+    throw new Error("Please sign in");
+  }
   if (user.is_banned) throw new Error("Your account is suspended");
   const settings = await getSettings();
   return { user, settings };
+}
+
+/** Private notes the admin sent to this user. */
+export async function listNotes(userId: number) {
+  const db = await getDb();
+  const { data } = await db
+    .from("user_notes")
+    .select("id, subject, body, read_at, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return (data ?? []) as {
+    id: number;
+    subject: string | null;
+    body: string;
+    read_at: string | null;
+    created_at: string;
+  }[];
+}
+
+export async function markNoteRead(auth: MiniAuth, noteId: number) {
+  const { user } = await authenticate(auth);
+  const db = await getDb();
+  await db
+    .from("user_notes")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+  return { ok: true };
 }
 
 function publicProduct(p: Product, stock: number) {
