@@ -1,0 +1,2 @@
+ALTER TYPE public.payment_asset ADD VALUE IF NOT EXISTS 'USDT_ERC20';
+ALTER TYPE public.payment_asset ADD VALUE IF NOT EXISTS 'LTC';

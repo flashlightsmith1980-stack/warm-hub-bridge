@@ -1,0 +1,7 @@
+INSERT INTO public.message_templates (title, category, body)
+VALUES (
+  'E-BANK ENROLL $40 USDT flash sale thank you',
+  'advertising',
+  E'💎🔥 𝗘-𝗕𝗔𝗡𝗞 𝗘𝗡𝗥𝗢𝗟𝗟 🔥💎\n🤖🚀 @𝗘𝗻𝗿𝗼𝗹𝗹_𝗟𝗼𝗴𝘀𝗯𝗼𝘁 🚀🤖\n\n━━━━━━━━━━━━━━━━━━━━\n\n🎉💎 𝗕𝗜𝗚 𝗧𝗛𝗔𝗡𝗞 𝗬𝗢𝗨! 💎🎉\n\nWe want to give a HUGE shout-out and special appreciation to:\n\n👑🔥 @𝘀𝗷𝘆𝗿𝗰𝗳𝘆 🔥👑\n\nfor successfully making a $40 USDT TRC20 deposit through our bot! 🚀💰\n\n━━━━━━━━━━━━━━━━━━━━\n\n🎯 𝗧𝗥𝗔𝗡𝗦𝗔𝗖𝗧𝗜𝗢𝗡 𝗗𝗘𝗧𝗔𝗜𝗟𝗦\n\n💎 Category: Premium Email\n💰 Amount: $40 USDT\n🔗 Network: TRC20\n🤖 Method: Telegram Bot\n🔥 Offer: 3-Hour Flash Sale\n\n━━━━━━━━━━━━━━━━━━━━\n\n🔥⏰ 𝗙𝗟𝗔𝗦𝗛 𝗦𝗔𝗟𝗘 𝗦𝗨𝗖𝗖𝗘𝗦𝗦! ⏰🔥\n\nOur 3-Hour Flash Sale is getting attention! 🎉\n\nA special thank you to @𝘀𝗷𝘆𝗿𝗰𝗳𝘆 for taking advantage of the limited-time promotion and supporting E-BANK ENROLL. 💎\n\n❤️ Your trust and support mean a lot to us.\n\n━━━━━━━━━━━━━━━━━━━━\n\n🎁 𝗪𝗛𝗔𝗧'𝗦 𝗡𝗘𝗫𝗧?\n\n🔥 More flash sales\n💎 More premium products\n🎉 More subscriber rewards\n⚡ More exciting releases\n🚀 More improvements to our bot\n\n📲 Keep your notifications ON so you don''t miss the next promotion!\n\n━━━━━━━━━━━━━━━━━━━━\n\n👑💎 𝗧𝗛𝗔𝗡𝗞 𝗬𝗢𝗨, @𝘀𝗷𝘆𝗿𝗰𝗳𝘆! 👑💎\n\n🙏 Thank you for choosing E-BANK ENROLL.\n\n🔥 𝗙𝗟𝗔𝗦𝗛 𝗦𝗔𝗟𝗘 • 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗘𝗠𝗔𝗜𝗟 • $40 𝗨𝗦𝗗𝗧\n\n🤖 @𝗘𝗻𝗿𝗼𝗹𝗹_𝗟𝗼𝗴𝘀𝗯𝗼𝘁 🚀\n\n💎 𝗪𝗘 𝗔𝗣𝗣𝗥𝗘𝗖𝗜𝗔𝗧𝗘 𝗬𝗢𝗨! ❤️🔥'
+)
+ON CONFLICT DO NOTHING;
