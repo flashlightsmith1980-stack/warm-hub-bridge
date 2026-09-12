@@ -115,15 +115,16 @@ function publicProduct(p: Product, stock: number) {
   };
 }
 
-export async function bootstrap(initData: string) {
-  const { user, settings } = await authenticate(initData);
+export async function bootstrap(auth: MiniAuth) {
+  const { user, settings } = await authenticate(auth);
   const db = await getDb();
-  const [categories, products, featured, cart, orders] = await Promise.all([
+  const [categories, products, featured, cart, orders, notes] = await Promise.all([
     listCategories(),
     listProducts(null),
     listFeaturedProducts(),
     getCart(user.id),
     listOrders(user.id),
+    listNotes(user.id),
   ]);
   const allProducts = [...products, ...featured, ...cart.map((row) => row.product)];
   const stocks = await stockMap([...new Map(allProducts.map((p) => [p.id, p])).values()]);
@@ -136,6 +137,8 @@ export async function bootstrap(initData: string) {
 
   return {
     user: {
+      id: user.id,
+      login_username: (user as { login_username?: string | null }).login_username ?? null,
       telegram_id: user.telegram_id,
       username: user.username,
       first_name: user.first_name,
@@ -169,24 +172,25 @@ export async function bootstrap(initData: string) {
     })),
     cartTotal: cartTotal(cart),
     orders,
+    notes,
   };
 }
 
-export async function addItem(initData: string, productId: number) {
-  const { user } = await authenticate(initData);
+export async function addItem(auth: MiniAuth, productId: number) {
+  const { user } = await authenticate(auth);
   await addToCart(user.id, productId);
   return { ok: true };
 }
 
-export async function removeItem(initData: string, cartItemId: number) {
-  const { user } = await authenticate(initData);
+export async function removeItem(auth: MiniAuth, cartItemId: number) {
+  const { user } = await authenticate(auth);
   const db = await getDb();
   await db.from("cart_items").delete().eq("id", cartItemId).eq("user_id", user.id);
   return { ok: true };
 }
 
-export async function pay(initData: string) {
-  const { user } = await authenticate(initData);
+export async function pay(auth: MiniAuth) {
+  const { user } = await authenticate(auth);
   const result = await checkout(user);
   return result;
 }
@@ -217,8 +221,8 @@ function toInvoice(tx: Transaction): MiniInvoice {
   };
 }
 
-export async function topUp(initData: string, asset: PaymentAsset, amountUsd: number) {
-  const { user, settings } = await authenticate(initData);
+export async function topUp(auth: MiniAuth, asset: PaymentAsset, amountUsd: number) {
+  const { user, settings } = await authenticate(auth);
   if (!Number.isFinite(amountUsd) || amountUsd < Number(settings.min_topup_usd)) {
     throw new Error(`Minimum top-up is $${Number(settings.min_topup_usd).toFixed(2)}`);
   }
@@ -226,8 +230,8 @@ export async function topUp(initData: string, asset: PaymentAsset, amountUsd: nu
   return toInvoice(tx);
 }
 
-export async function submitHash(initData: string, txId: number, hash: string) {
-  const { user, settings } = await authenticate(initData);
+export async function submitHash(auth: MiniAuth, txId: number, hash: string) {
+  const { user, settings } = await authenticate(auth);
   const db = await getDb();
   const { data } = await db
     .from("transactions")
