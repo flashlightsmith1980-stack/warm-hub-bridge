@@ -1,20 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import {
-  Boxes,
-  CheckCircle2,
-  Layers,
-  MessagesSquare,
-  Package,
-  ShieldCheck,
-  ShoppingBag,
-  Star,
-  Timer,
-  Truck,
-} from "lucide-react";
+import { Boxes, Layers, Package, ShieldCheck, ShoppingBag, Star, Timer } from "lucide-react";
 import { storefrontData } from "@/lib/storefront.functions";
 import { Button } from "@/components/ui/button";
 import { SiteHeader, ChannelStrip } from "@/components/site-header";
+import {
+  CategoryCard,
+  ProductCard,
+  StatTile,
+  StoreFooter,
+  WhyGrid,
+} from "@/components/store-chrome";
 
 const storefrontQuery = queryOptions({
   queryKey: ["storefront"],
