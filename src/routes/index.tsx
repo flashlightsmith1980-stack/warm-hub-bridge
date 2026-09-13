@@ -41,15 +41,6 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const WHY = [
-  { icon: Timer, title: "Instant delivery", body: "Keys and files land in your account seconds after checkout." },
-  { icon: ShieldCheck, title: "Verified stock", body: "Every item is checked before it is listed for sale." },
-  { icon: Truck, title: "Always restocked", body: "New inventory added daily across every category." },
-  { icon: MessagesSquare, title: "Real support", body: "Talk to a human on Telegram whenever you need help." },
-  { icon: CheckCircle2, title: "Replacement policy", body: "Something wrong? Open a dispute and get it sorted." },
-  { icon: ShoppingBag, title: "Buy your way", body: "Use the website, the Telegram bot or the Mini App." },
-];
-
 function Index() {
   const { data } = useSuspenseQuery(storefrontQuery);
   const tiles = [
