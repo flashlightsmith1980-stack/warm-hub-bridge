@@ -10,6 +10,7 @@ export type StorefrontCategory = {
   image_url: string | null;
   products: number;
   stock: number;
+  fileProducts: number;
 };
 
 export const storefrontData = createServerFn({ method: "GET" }).handler(async () => {
@@ -65,6 +66,7 @@ export const storefrontData = createServerFn({ method: "GET" }).handler(async ()
       image_url: category.image_url,
       products: own.length,
       stock: own.filter(isAvailable).length,
+      fileProducts: own.filter(isUnlimited).length,
     };
   });
 
